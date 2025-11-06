@@ -2,7 +2,6 @@ import java.io.*;
 import java.net.*;
 import java.util.*;
 import java.util.stream.Collectors;
-
 import model.User;
 import model.Product;
 import controller.ShopController;
@@ -12,10 +11,11 @@ public class Server {
 
     private static final int PORT = 8080;
     private ShopController shop = new ShopController();
-    private Map<String, User> users = new HashMap<>();  // зарегистрированные пользователи
-    private Map<String, User> sessions = new HashMap<>(); // sessionId -> User
+    private Map<String, User> users = new HashMap<>();
+    private Map<String, User> sessions = new HashMap<>();
 
     private final String USERS_FILE = "users.txt";
+    private final String CARTS_FILE = "carts.txt";
 
     public static void main(String[] args) {
         new Server().start();
@@ -23,6 +23,7 @@ public class Server {
 
     public void start() {
         loadUsers();
+        loadCarts();
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started on port " + PORT);
 
@@ -37,9 +38,11 @@ public class Server {
     }
 
     private void loadUsers() {
-        File file = new File(USERS_FILE);
-        if (!file.exists()) return;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), "UTF-8"))) {
+        File usersFile = new File(USERS_FILE);
+        if (!usersFile.exists()) return;
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(usersFile), "UTF-8"))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(":");
@@ -52,12 +55,57 @@ public class Server {
         }
     }
 
+    private void loadCarts() {
+        File cartsFile = new File(CARTS_FILE);
+        if (!cartsFile.exists()) return;
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(cartsFile), "UTF-8"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    User user = users.get(parts[0]);
+                    if (user != null && !parts[1].isEmpty()) {
+                        String[] productIds = parts[1].split(",");
+                        for (String idStr : productIds) {
+                            try {
+                                int id = Integer.parseInt(idStr);
+                                Product p = shop.getProductById(id);
+                                if (p != null) user.addToCart(p);
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void saveUsers() {
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(USERS_FILE), "UTF-8"))) {
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(new FileOutputStream(USERS_FILE), "UTF-8"))) {
             for (User u : users.values()) {
                 writer.write(u.getUsername() + ":" + u.getPassword());
                 writer.newLine();
             }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveCarts() {
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(new FileOutputStream(CARTS_FILE), "UTF-8"))) {
+            for (User u : users.values()) {
+                String cartStr = u.getCart().stream()
+                                  .map(p -> String.valueOf(p.getId()))
+                                  .collect(Collectors.joining(","));
+                writer.write(u.getUsername() + ":" + cartStr);
+                writer.newLine();
+            }
+            System.out.println("Carts saved!");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -122,7 +170,6 @@ public class Server {
 
             User currentUser = sessionId != null ? sessions.get(sessionId) : null;
 
-            // Роутинг
             if (path.equals("/")) {
                 sendPage(out, SimpleHttpView.renderProductList(shop.getProducts()), sessionId);
             } else if (path.equals("/register")) {
@@ -139,6 +186,7 @@ public class Server {
                         User user = new User(username, password);
                         users.put(username, user);
                         saveUsers();
+                        saveCarts();
                         sendPage(out, SimpleHttpView.renderMessage("Регистрация успешна"), sessionId);
                     }
                 }
@@ -171,6 +219,7 @@ public class Server {
                         Product p = shop.getProductById(id);
                         if (p != null) currentUser.addToCart(p);
                     }
+                    saveCarts(); 
                     sendPage(out, SimpleHttpView.renderCart(currentUser), sessionId);
                 } else {
                     sendPage(out, SimpleHttpView.renderMessage("Сначала войдите"), sessionId);
