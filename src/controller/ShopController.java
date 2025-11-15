@@ -1,7 +1,6 @@
-package controller;
-
-import java.util.*;
-import model.Product;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 public class ShopController {
     private Map<Integer, Product> products = new HashMap<>();

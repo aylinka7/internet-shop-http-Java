@@ -1,8 +1,4 @@
-package view;
-
 import java.util.Collection;
-import model.Product;
-import model.User;
 
 public class SimpleHttpView {
 
@@ -12,9 +8,7 @@ public class SimpleHttpView {
         sb.append("<ul>");
         for (Product p : products) {
             sb.append("<li>")
-              .append(p.getName())
-              .append(" - $")
-              .append(p.getPrice())
+              .append(p.getName()).append(" - $").append(p.getPrice())
               .append(" <form method='POST' action='/add'>")
               .append("<input type='hidden' name='id' value='").append(p.getId()).append("'>")
               .append("<button>В корзину</button></form></li>");
@@ -33,8 +27,11 @@ public class SimpleHttpView {
         StringBuilder sb = new StringBuilder();
         sb.append("<h1>Корзина пользователя: ").append(user.getUsername()).append("</h1>");
         sb.append("<ul>");
-        for (Product p : user.getCart()) {
-            sb.append("<li>").append(p.getName()).append(" - $").append(p.getPrice()).append("</li>");
+        for (Product p : user.getCart().getItems()) {
+            sb.append("<li>").append(p.getName()).append(" - $").append(p.getPrice())
+              .append(" <form method='POST' action='/remove'>")
+              .append("<input type='hidden' name='id' value='").append(p.getId()).append("'>")
+              .append("<button>Удалить</button></form></li>");
         }
         sb.append("</ul>");
         sb.append("<a href='/'>На главную</a>");
