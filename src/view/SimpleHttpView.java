@@ -2,7 +2,7 @@ import java.util.Collection;
 
 public class SimpleHttpView {
 
-    public static String renderProductList(Collection<Product> products) {
+    public static String renderProductList(Collection<Product> products, User currentUser) {
         StringBuilder sb = new StringBuilder();
         sb.append("<h1>Магазин обуви</h1>");
         sb.append("<ul>");
@@ -16,9 +16,35 @@ public class SimpleHttpView {
         sb.append("</ul>");
         sb.append("<a href='/cart'>Перейти в корзину</a>");
         sb.append("<hr>");
-        sb.append("<a href='/login'>Войти</a> | <a href='/register'>Регистрация</a>");
 
-        String header = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Shop</title></head><body>";
+        // Условное отображение: Войти/Регистрация или Выйти
+        if (currentUser != null) {
+            sb.append("<a href='/logout'>Выйти</a>");
+        } else {
+            sb.append("<a href='/login'>Войти</a> | <a href='/register'>Регистрация</a>");
+        }
+
+        String header = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Магазин</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+                    h1 { color: #333; }
+                    ul { list-style: none; padding: 0; }
+                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+                    button:hover { background: #0056b3; }
+                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
+                    a:hover { text-decoration: underline; }
+                    form { display: inline; }
+                    hr { margin: 30px 0; }
+                </style>
+            </head>
+            <body>
+            """;
         String footer = "</body></html>";
         return header + sb.toString() + footer;
     }
@@ -36,13 +62,53 @@ public class SimpleHttpView {
         sb.append("</ul>");
         sb.append("<a href='/'>На главную</a>");
 
-        String header = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Cart</title></head><body>";
+        String header = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Корзина</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+                    h1 { color: #333; }
+                    ul { list-style: none; padding: 0; }
+                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+                    button:hover { background: #0056b3; }
+                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
+                    a:hover { text-decoration: underline; }
+                    form { display: inline; }
+                    hr { margin: 30px 0; }
+                </style>
+            </head>
+            <body>
+            """;
         String footer = "</body></html>";
         return header + sb.toString() + footer;
     }
 
     public static String renderMessage(String msg) {
-        String header = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Message</title></head><body>";
+      String header = """
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <meta charset='UTF-8'>
+              <title>Сообщение</title>
+              <style>
+                  body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+                  h1 { color: #333; }
+                  ul { list-style: none; padding: 0; }
+                  li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                  button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+                  button:hover { background: #0056b3; }
+                  a { color: #007bff; text-decoration: none; margin: 0 10px; }
+                  a:hover { text-decoration: underline; }
+                  form { display: inline; }
+                  hr { margin: 30px 0; }
+              </style>
+          </head>
+          <body>
+          """;
         String footer = "</body></html>";
         return header + "<h1>" + msg + "</h1><a href='/'>На главную</a>" + footer;
     }
@@ -55,7 +121,27 @@ public class SimpleHttpView {
                 "<button>Зарегистрироваться</button>" +
                 "</form><a href='/'>На главную</a>";
 
-        String header = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Регистрация</title></head><body>";
+        String header = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Решистрация</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+                    h1 { color: #333; }
+                    ul { list-style: none; padding: 0; }
+                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+                    button:hover { background: #0056b3; }
+                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
+                    a:hover { text-decoration: underline; }
+                    form { display: inline; }
+                    hr { margin: 30px 0; }
+                </style>
+            </head>
+            <body>
+            """;
         String footer = "</body></html>";
         return header + form + footer;
     }
@@ -68,7 +154,27 @@ public class SimpleHttpView {
                 "<button>Войти</button>" +
                 "</form><a href='/'>На главную</a>";
 
-        String header = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Вход</title></head><body>";
+        String header = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset='UTF-8'>
+                <title>Вход</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
+                    h1 { color: #333; }
+                    ul { list-style: none; padding: 0; }
+                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
+                    button:hover { background: #0056b3; }
+                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
+                    a:hover { text-decoration: underline; }
+                    form { display: inline; }
+                    hr { margin: 30px 0; }
+                </style>
+            </head>
+            <body>
+            """;
         String footer = "</body></html>";
         return header + form + footer;
     }

@@ -133,7 +133,13 @@ public class Server {
 
             User currentUser = sessionId!=null? sessions.get(sessionId) : null;
 
-            if (path.equals("/")) sendPage(out, SimpleHttpView.renderProductList(shop.getProducts()), sessionId);
+            if (path.equals("/")) {
+                sendPage(out, SimpleHttpView.renderProductList(shop.getProducts(), currentUser), sessionId);
+            }
+            else if (path.equals("/logout") && currentUser != null) {
+                sessions.remove(sessionId);
+                sendPage(out, SimpleHttpView.renderMessage("Вы вышли из системы."), null);
+            }
             else if (path.equals("/register")) handleRegister(method, postParams, out, sessionId);
             else if (path.equals("/login")) handleLogin(method, postParams, out, sessionId);
             else if (path.equals("/cart")) {
