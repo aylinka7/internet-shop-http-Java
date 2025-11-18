@@ -1,15 +1,14 @@
 import java.io.*;
 import java.net.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
 public class Server {
-
     private static final int PORT = 8080;
-    private ShopController shop = new ShopController();
-    private Map<String, User> users = new HashMap<>();
-    private Map<String, User> sessions = new HashMap<>();
-
+    private final ShopController shop = new ShopController();
+    private final Map<String, User> users = new HashMap<>();
+    private final Map<String, User> sessions = new HashMap<>();
     private final String USERS_FILE = "users.txt";
     private final String CARTS_FILE = "carts.txt";
 
@@ -21,7 +20,7 @@ public class Server {
         loadUsers();
         loadCarts();
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
-            System.out.println("Server started on port " + PORT);
+            System.out.println("Server started on  http://localhost:" + PORT);
             while (true) {
                 Socket socket = serverSocket.accept();
                 new Thread(() -> handleClient(socket)).start();
@@ -32,187 +31,243 @@ public class Server {
     }
 
     private void loadUsers() {
-        File usersFile = new File(USERS_FILE);
-        if (!usersFile.exists()) return;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(usersFile), "UTF-8"))) {
+        File file = new File(USERS_FILE);
+        if (!file.exists()) return;
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
             String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2) users.put(parts[0], new User(parts[0], parts[1]));
-            }
-        } catch (IOException e) { e.printStackTrace(); }
-    }
-
-    private void loadCarts() {
-        File cartsFile = new File(CARTS_FILE);
-        if (!cartsFile.exists()) return;
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(cartsFile), "UTF-8"))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2) {
-                    User user = users.get(parts[0]);
-                    if (user != null && !parts[1].isEmpty()) {
-                        String[] ids = parts[1].split(",");
-                        for (String idStr : ids) {
-                            try {
-                                int id = Integer.parseInt(idStr);
-                                Product p = shop.getProductById(id);
-                                if (p != null) user.getCart().add(p);
-                            } catch (NumberFormatException ignored) {}
-                        }
-                    }
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split(":", 2);
+                if (p.length == 2) {
+                    users.put(p[0], new User(p[0], p[1]));
                 }
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
     private void saveUsers() {
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(USERS_FILE), "UTF-8"))) {
+        try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(USERS_FILE), StandardCharsets.UTF_8))) {
             for (User u : users.values()) {
-                writer.write(u.getUsername() + ":" + u.getPassword());
-                writer.newLine();
+                bw.write(u.getUsername() + ":" + u.getPassword());
+                bw.newLine();
+            }
+        } catch (IOException e) { e.printStackTrace(); }
+    }
+
+    private void loadCarts() {
+        File file = new File(CARTS_FILE);
+        if (!file.exists()) return;
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] p = line.split(":", 2);
+                if (p.length != 2) continue;
+                User user = users.get(p[0]);
+                if (user == null || p[1].isEmpty()) continue;
+                for (String idStr : p[1].split(",")) {
+                    try {
+                        int id = Integer.parseInt(idStr.trim());
+                        Product prod = shop.getProductById(id);
+                        if (prod != null) user.getCart().add(prod);
+                    } catch (NumberFormatException ignored) {}
+                }
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
     private void saveCarts() {
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(CARTS_FILE), "UTF-8"))) {
+        try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(CARTS_FILE), StandardCharsets.UTF_8))) {
             for (User u : users.values()) {
-                String cartStr = u.getCart().getItems().stream()
-                                  .map(p -> String.valueOf(p.getId()))
-                                  .collect(Collectors.joining(","));
-                writer.write(u.getUsername() + ":" + cartStr);
-                writer.newLine();
+                String ids = u.getCart().getItems().stream()
+                        .map(p -> String.valueOf(p.getId()))
+                        .collect(Collectors.joining(","));
+                bw.write(u.getUsername() + ":" + ids);
+                bw.newLine();
             }
         } catch (IOException e) { e.printStackTrace(); }
     }
 
     private void handleClient(Socket socket) {
-        try (
-            InputStream in = socket.getInputStream();
-            OutputStream out = socket.getOutputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(in, "UTF-8"))
-        ) {
-            String line = reader.readLine();
-            if (line == null || line.isEmpty()) return;
+        try (socket;
+             BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+             OutputStream out = socket.getOutputStream()) {
 
-            String[] parts = line.split(" ");
-            String method = parts[0], path = parts[1];
-            Map<String,String> postParams = new HashMap<>();
+            String requestLine = in.readLine();
+            if (requestLine == null) return;
+            String[] parts = requestLine.split(" ");
+            if (parts.length < 2) return;
+            String method = parts[0];
+            String path = parts[1];
+
+            Map<String, String> headers = new HashMap<>();
+            String line;
+            while ((line = in.readLine()) != null && !line.isEmpty()) {
+                int colon = line.indexOf(':');
+                if (colon > 0) {
+                    headers.put(line.substring(0, colon).trim(), line.substring(colon + 1).trim());
+                }
+            }
+
             String sessionId = null;
+            String cookieHeader = headers.get("Cookie");
+            if (cookieHeader != null) {
+                for (String c : cookieHeader.split(";")) {
+                    String[] kv = c.trim().split("=", 2);
+                    if (kv.length == 2 && "SESSIONID".equals(kv[0])) sessionId = kv[1];
+                }
+            }
+            User currentUser = sessionId != null ? sessions.get(sessionId) : null;
 
-            if (method.equals("POST")) {
-                int contentLength = 0;
-                String header;
-                while (!(header = reader.readLine()).isEmpty()) {
-                    if (header.startsWith("Content-Length:")) contentLength = Integer.parseInt(header.split(":")[1].trim());
-                    else if (header.startsWith("Cookie:")) {
-                        for (String cookie : header.substring(7).split(";")) {
-                            String[] kv = cookie.trim().split("=");
-                            if (kv.length==2 && kv[0].equals("SESSIONID")) sessionId = kv[1];
-                        }
-                    }
-                }
-                char[] body = new char[contentLength];
-                reader.read(body);
-                for (String pair : new String(body).split("&")) {
-                    String[] kv = pair.split("=");
-                    if (kv.length==2) postParams.put(URLDecoder.decode(kv[0],"UTF-8"), URLDecoder.decode(kv[1],"UTF-8"));
-                }
-            } else {
-                while (!(line = reader.readLine()).isEmpty()) {
-                    if (line.startsWith("Cookie:")) {
-                        for (String cookie : line.substring(7).split(";")) {
-                            String[] kv = cookie.trim().split("=");
-                            if (kv.length==2 && kv[0].equals("SESSIONID")) sessionId = kv[1];
+            Map<String, String> postParams = new HashMap<>();
+            if ("POST".equals(method)) {
+                String lenStr = headers.get("Content-Length");
+                if (lenStr != null) {
+                    int len = Integer.parseInt(lenStr);
+                    if (len > 0) {
+                        char[] buf = new char[len];
+                        in.read(buf, 0, len);
+                        String body = new String(buf);
+                        for (String pair : body.split("&")) {
+                            String[] kv = pair.split("=", 2);
+                            if (kv.length == 2) {
+                                postParams.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8),
+                                               URLDecoder.decode(kv[1], StandardCharsets.UTF_8));
+                            }
                         }
                     }
                 }
             }
 
-            User currentUser = sessionId!=null? sessions.get(sessionId) : null;
+            if (path.startsWith("/img/")) {
+                serveStaticFile(path, out);
+                return;
+            }
 
-            if (path.equals("/")) {
+            if (path.equals("/") || path.equals("/index.html")) {
                 sendPage(out, SimpleHttpView.renderProductList(shop.getProducts(), currentUser), sessionId);
-            }
-            else if (path.equals("/logout") && currentUser != null) {
-                sessions.remove(sessionId);
-                sendPage(out, SimpleHttpView.renderMessage("Вы вышли из системы."), null);
-            }
-            else if (path.equals("/register")) handleRegister(method, postParams, out, sessionId);
-            else if (path.equals("/login")) handleLogin(method, postParams, out, sessionId);
-            else if (path.equals("/cart")) {
+
+            } else if (path.equals("/cart")) {
                 if (currentUser != null) sendPage(out, SimpleHttpView.renderCart(currentUser), sessionId);
-                else sendPage(out, SimpleHttpView.renderMessage("Сначала войдите"), sessionId);
-            }
-            else if (path.equals("/add") && method.equals("POST")) {
-                if (currentUser != null) {
-                    int id = Integer.parseInt(postParams.get("id"));
-                    Product p = shop.getProductById(id);
-                    if (p != null) currentUser.getCart().add(p);
-                    saveCarts();
-                    sendPage(out, SimpleHttpView.renderCart(currentUser), sessionId);
-                } else sendPage(out, SimpleHttpView.renderMessage("Сначала войдите"), sessionId);
-            }
-            else if (path.equals("/remove") && method.equals("POST")) {
-                if (currentUser != null) {
-                    int id = Integer.parseInt(postParams.get("id"));
-                    Product p = shop.getProductById(id);
-                    if (p != null) currentUser.getCart().remove(p);
-                    saveCarts();
-                    sendPage(out, SimpleHttpView.renderCart(currentUser), sessionId);
-                } else sendPage(out, SimpleHttpView.renderMessage("Сначала войдите"), sessionId);
-            }
-            else sendPage(out, SimpleHttpView.renderMessage("Страница не найдена"), sessionId);
+                else sendPage(out, SimpleHttpView.renderMessage("Сначала войдите в систему"), sessionId);
 
-            socket.close();
-        } catch (IOException e) { e.printStackTrace(); }
-    }
+            } else if (path.equals("/add") && "POST".equals(method) && currentUser != null) {
+                String idStr = postParams.get("id");
+                if (idStr != null) {
+                    int id = Integer.parseInt(idStr);
+                    Product p = shop.getProductById(id);
+                    if (p != null) {
+                        currentUser.getCart().add(p);
+                        saveCarts();
+                    }
+                }
+                redirect(out, "/cart");
 
-    private void handleRegister(String method, Map<String,String> postParams, OutputStream out, String sessionId) throws IOException {
-        if (method.equals("GET")) sendPage(out, SimpleHttpView.renderRegisterForm(), sessionId);
-        else {
-            String username = postParams.get("username");
-            String password = postParams.get("password");
-            if (username==null || password==null || username.isEmpty() || password.isEmpty())
-                sendPage(out, SimpleHttpView.renderMessage("Ошибка: заполните все поля"), sessionId);
-            else if (users.containsKey(username))
-                sendPage(out, SimpleHttpView.renderMessage("Пользователь уже существует"), sessionId);
-            else {
-                User user = new User(username, password);
-                users.put(username, user);
-                saveUsers();
-                saveCarts();
-                sendPage(out, SimpleHttpView.renderMessage("Регистрация успешна"), sessionId);
+            } else if (path.equals("/remove") && "POST".equals(method) && currentUser != null) {
+                String idStr = postParams.get("id");
+                if (idStr != null) {
+                    int id = Integer.parseInt(idStr);
+                    Product p = shop.getProductById(id);
+                    if (p != null) {
+                        currentUser.getCart().remove(p);
+                        saveCarts();
+                    }
+                }
+                redirect(out, "/cart");
+
+            } else if (path.equals("/login")) {
+                if ("GET".equals(method)) sendPage(out, SimpleHttpView.renderLoginForm(), sessionId);
+                else handleLogin(postParams, out);
+
+            } else if (path.equals("/register")) {
+                if ("GET".equals(method)) sendPage(out, SimpleHttpView.renderRegisterForm(), sessionId);
+                else handleRegister(postParams, out);
+
+            } else if (path.equals("/logout") && currentUser != null) {
+                sessions.remove(sessionId);
+                redirect(out, "/");
+
+            } else {
+                sendPage(out, SimpleHttpView.renderMessage("Страница не найдена"), null);
             }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
-    private void handleLogin(String method, Map<String,String> postParams, OutputStream out, String sessionId) throws IOException {
-        if (method.equals("GET")) sendPage(out, SimpleHttpView.renderLoginForm(), sessionId);
-        else {
-            String username = postParams.get("username");
-            String password = postParams.get("password");
-            User user = users.get(username);
-            if (user != null && user.getPassword().equals(password)) {
-                String newSessionId = UUID.randomUUID().toString();
-                sessions.put(newSessionId, user);
-                sendPage(out, SimpleHttpView.renderMessage("Вход успешен!"), newSessionId);
-            } else sendPage(out, SimpleHttpView.renderMessage("Неверный логин или пароль"), sessionId);
+    private void handleRegister(Map<String, String> p, OutputStream out) throws IOException {
+        String u = p.get("username"), pw = p.get("password");
+        if (u == null || pw == null || u.isBlank() || pw.isBlank()) {
+            sendPage(out, SimpleHttpView.renderMessage("Заполните все поля"), null);
+            return;
+        }
+        if (users.containsKey(u)) {
+            sendPage(out, SimpleHttpView.renderMessage("Пользователь уже существует"), null);
+            return;
+        }
+        users.put(u, new User(u, pw));
+        saveUsers();
+        saveCarts();
+        sendPage(out, SimpleHttpView.renderMessage("Регистрация успешна! Теперь войдите."), null);
+    }
+
+    private void handleLogin(Map<String, String> p, OutputStream out) throws IOException {
+        String u = p.get("username"), pw = p.get("password");
+        User user = users.get(u);
+        if (user != null && user.getPassword().equals(pw)) {
+            String sid = UUID.randomUUID().toString();
+            sessions.put(sid, user);
+            sendPage(out, SimpleHttpView.renderMessage("Добро пожаловать, " + u + "!"), sid);
+        } else {
+            sendPage(out, SimpleHttpView.renderMessage("Неверный логин или пароль"), null);
         }
     }
 
-    private void sendPage(OutputStream out, String content, String sessionId) {
+    private void sendPage(OutputStream out, String html, String sessionId) throws IOException {
+        byte[] data = html.getBytes(StandardCharsets.UTF_8);
+        out.write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n".getBytes());
+        if (sessionId != null) out.write(("Set-Cookie: SESSIONID=" + sessionId + "; Path=/; HttpOnly\r\n").getBytes());
+        out.write(("Content-Length: " + data.length + "\r\n\r\n").getBytes());
+        out.write(data);
+    }
+
+    private void redirect(OutputStream out, String location) throws IOException {
+        out.write(("HTTP/1.1 303 See Other\r\nLocation: " + location + "\r\n\r\n").getBytes());
+    }
+
+    private void serveStaticFile(String path, OutputStream out) {
+        File file = new File("." + path);
+        if (!file.exists() || file.isDirectory()) {
+            send404(out);
+            return;
+        }
+        String ext = path.contains(".") ? path.substring(path.lastIndexOf(".") + 1).toLowerCase() : "";
+        String mime = switch (ext) {
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "png" -> "image/png";
+            case "gif" -> "image/gif";
+            case "webp" -> "image/webp";
+            case "ico" -> "image/x-icon";
+            default -> "application/octet-stream";
+        };
+        try (FileInputStream fis = new FileInputStream(file)) {
+            byte[] data = fis.readAllBytes();
+            out.write("HTTP/1.1 200 OK\r\n".getBytes());
+            out.write(("Content-Type: " + mime + "\r\n").getBytes());
+            out.write(("Content-Length: " + data.length + "\r\n").getBytes());
+            out.write("Cache-Control: public, max-age=86400\r\n\r\n".getBytes());
+            out.write(data);
+        } catch (Exception e) {
+            send404(out);
+        }
+    }
+
+    private void send404(OutputStream out) {
+        String msg = "<h1>404 — Файл не найден</h1>";
         try {
-            byte[] bytes = content.getBytes("UTF-8");
-            out.write(("HTTP/1.1 200 OK\r\n").getBytes("UTF-8"));
-            out.write(("Content-Type: text/html; charset=UTF-8\r\n").getBytes("UTF-8"));
-            if (sessionId != null) out.write(("Set-Cookie: SESSIONID=" + sessionId + "\r\n").getBytes("UTF-8"));
-            out.write(("Content-Length: " + bytes.length + "\r\n").getBytes("UTF-8"));
-            out.write("\r\n".getBytes("UTF-8"));
-            out.write(bytes);
-            out.flush();
-        } catch (IOException e) { e.printStackTrace(); }
+            byte[] b = msg.getBytes(StandardCharsets.UTF_8);
+            out.write("HTTP/1.1 404 Not Found\r\nContent-Type: text/html; charset=UTF-8\r\n".getBytes());
+            out.write(("Content-Length: " + b.length + "\r\n\r\n").getBytes());
+            out.write(b);
+        } catch (Exception ignored) {}
     }
 }

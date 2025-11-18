@@ -1,181 +1,90 @@
-import java.util.Collection;
+import java.util.*;
 
 public class SimpleHttpView {
 
+    private static String h(String s) {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
     public static String renderProductList(Collection<Product> products, User currentUser) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<h1>Магазин обуви</h1>");
-        sb.append("<ul>");
-        for (Product p : products) {
-            sb.append("<li>")
-              .append(p.getName()).append(" - $").append(p.getPrice())
-              .append(" <form method='POST' action='/add'>")
-              .append("<input type='hidden' name='id' value='").append(p.getId()).append("'>")
-              .append("<button>В корзину</button></form></li>");
-        }
-        sb.append("</ul>");
-        sb.append("<a href='/cart'>Перейти в корзину</a>");
-        sb.append("<hr>");
+        sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Магазин обуви</title>");
+        sb.append("<style>body{font-family:Arial,sans-serif;margin:40px;background:#f9f9f9;}");
+        sb.append("h1{color:#333;} .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:25px;}");
+        sb.append(".card{background:white;padding:20px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.1);text-align:center;}");
+        sb.append("img{max-width:100%;height:220px;object-fit:cover;border-radius:8px;}");
+        sb.append("button{background:#1976d2;color:white;border:none;padding:12px 24px;border-radius:6px;cursor:pointer;font-size:16px;}");
+        sb.append("button:hover{background:#1565c0;} button:disabled{background:#ccc;cursor:not-allowed;}</style></head><body>");
+        sb.append("<h1>Магазин спортивной обуви</h1>");
 
-        // Условное отображение: Войти/Регистрация или Выйти
         if (currentUser != null) {
-            sb.append("<a href='/logout'>Выйти</a>");
+            sb.append("<p>Привет, <b>").append(h(currentUser.getUsername())).append("</b>! ")
+              .append("<a href='/cart'>Корзина</a> | <a href='/logout'>Выйти</a></p>");
         } else {
-            sb.append("<a href='/login'>Войти</a> | <a href='/register'>Регистрация</a>");
+            sb.append("<p><a href='/login'>Войти</a> | <a href='/register'>Регистрация</a></p>");
         }
 
-        String header = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Магазин</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-                    h1 { color: #333; }
-                    ul { list-style: none; padding: 0; }
-                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-                    button:hover { background: #0056b3; }
-                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
-                    a:hover { text-decoration: underline; }
-                    form { display: inline; }
-                    hr { margin: 30px 0; }
-                </style>
-            </head>
-            <body>
-            """;
-        String footer = "</body></html>";
-        return header + sb.toString() + footer;
+        sb.append("<div class='grid'>");
+        for (Product p : products) {
+            sb.append("<div class='card'>")
+              .append("<img src='").append(p.getImage()).append("' alt='").append(h(p.getName())).append("'>")
+              .append("<h3>").append(h(p.getName())).append("</h3>")
+              .append("<p style='font-size:1.4em;color:#d32f2f;'>$").append(String.format("%.2f", p.getPrice())).append("</p>");
+
+            if (currentUser != null) {
+                sb.append("<form method='post' action='/add'>")
+                  .append("<input type='hidden' name='id' value='").append(p.getId()).append("'>")
+                  .append("<button type='submit'>В корзину</button></form>");
+            } else {
+                sb.append("<button disabled>Войдите, чтобы купить</button>");
+            }
+            sb.append("</div>");
+        }
+        sb.append("</div></body></html>");
+        return sb.toString();
     }
 
     public static String renderCart(User user) {
         StringBuilder sb = new StringBuilder();
-        sb.append("<h1>Корзина пользователя: ").append(user.getUsername()).append("</h1>");
-        sb.append("<ul>");
-        for (Product p : user.getCart().getItems()) {
-            sb.append("<li>").append(p.getName()).append(" - $").append(p.getPrice())
-              .append(" <form method='POST' action='/remove'>")
-              .append("<input type='hidden' name='id' value='").append(p.getId()).append("'>")
-              .append("<button>Удалить</button></form></li>");
+        sb.append("<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Корзина</title>");
+        sb.append("<style>body{font-family:Arial;margin:40px;background:#f9f9f9;} img{width:80px;height:80px;object-fit:cover;}");
+        sb.append(".item{display:flex;gap:20px;align-items:center;background:white;padding:15px;margin:10px 0;border-radius:8px;}</style></head><body>");
+        sb.append("<h1>Корзина — ").append(h(user.getUsername())).append("</h1>");
+        if (user.getCart().getItems().isEmpty()) {
+            sb.append("<p>Корзина пуста</p>");
+        } else {
+            for (Product p : user.getCart().getItems()) {
+                sb.append("<div class='item'>")
+                  .append("<img src='").append(p.getImage()).append("'>")
+                  .append("<div><b>").append(h(p.getName())).append("</b> — $").append(String.format("%.2f", p.getPrice())).append("</div>")
+                  .append("<form method='post' action='/remove'><input type='hidden' name='id' value='").append(p.getId()).append("'>")
+                  .append("<button style='background:#d32f2f;'>Удалить</button></form></div>");
+            }
         }
-        sb.append("</ul>");
-        sb.append("<a href='/'>На главную</a>");
-
-        String header = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Корзина</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-                    h1 { color: #333; }
-                    ul { list-style: none; padding: 0; }
-                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-                    button:hover { background: #0056b3; }
-                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
-                    a:hover { text-decoration: underline; }
-                    form { display: inline; }
-                    hr { margin: 30px 0; }
-                </style>
-            </head>
-            <body>
-            """;
-        String footer = "</body></html>";
-        return header + sb.toString() + footer;
+        sb.append("<hr><a href='/'>На главную</a></body></html>");
+        return sb.toString();
     }
 
     public static String renderMessage(String msg) {
-      String header = """
-          <!DOCTYPE html>
-          <html>
-          <head>
-              <meta charset='UTF-8'>
-              <title>Сообщение</title>
-              <style>
-                  body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-                  h1 { color: #333; }
-                  ul { list-style: none; padding: 0; }
-                  li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                  button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-                  button:hover { background: #0056b3; }
-                  a { color: #007bff; text-decoration: none; margin: 0 10px; }
-                  a:hover { text-decoration: underline; }
-                  form { display: inline; }
-                  hr { margin: 30px 0; }
-              </style>
-          </head>
-          <body>
-          """;
-        String footer = "</body></html>";
-        return header + "<h1>" + msg + "</h1><a href='/'>На главную</a>" + footer;
-    }
-
-    public static String renderRegisterForm() {
-        String form = "<h1>Регистрация</h1>" +
-                "<form method='POST' action='/register'>" +
-                "Имя: <input type='text' name='username'><br>" +
-                "Пароль: <input type='password' name='password'><br>" +
-                "<button>Зарегистрироваться</button>" +
-                "</form><a href='/'>На главную</a>";
-
-        String header = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Решистрация</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-                    h1 { color: #333; }
-                    ul { list-style: none; padding: 0; }
-                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-                    button:hover { background: #0056b3; }
-                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
-                    a:hover { text-decoration: underline; }
-                    form { display: inline; }
-                    hr { margin: 30px 0; }
-                </style>
-            </head>
-            <body>
-            """;
-        String footer = "</body></html>";
-        return header + form + footer;
+        return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Сообщение</title></head><body style='font-family:Arial;margin:40px;'>" +
+               "<h1>" + h(msg) + "</h1><a href='/'>На главную</a></body></html>";
     }
 
     public static String renderLoginForm() {
-        String form = "<h1>Вход</h1>" +
-                "<form method='POST' action='/login'>" +
-                "Имя: <input type='text' name='username'><br>" +
-                "Пароль: <input type='password' name='password'><br>" +
-                "<button>Войти</button>" +
-                "</form><a href='/'>На главную</a>";
+        return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Вход</title></head><body style='font-family:Arial;margin:40px;'>" +
+               "<h1>Вход</h1><form method='post' action='/login'>" +
+               "Логин: <input type='text' name='username'><br><br>" +
+               "Пароль: <input type='password' name='password'><br><br>" +
+               "<button style='padding:10px 20px;font-size:16px;'>Войти</button></form><br>" +
+               "<a href='/'>На главную</a> | <a href='/register'>Регистрация</a></body></html>";
+    }
 
-        String header = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset='UTF-8'>
-                <title>Вход</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; background: #f4f4f4; }
-                    h1 { color: #333; }
-                    ul { list-style: none; padding: 0; }
-                    li { background: white; margin: 10px 0; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-                    button { background: #007bff; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; }
-                    button:hover { background: #0056b3; }
-                    a { color: #007bff; text-decoration: none; margin: 0 10px; }
-                    a:hover { text-decoration: underline; }
-                    form { display: inline; }
-                    hr { margin: 30px 0; }
-                </style>
-            </head>
-            <body>
-            """;
-        String footer = "</body></html>";
-        return header + form + footer;
+    public static String renderRegisterForm() {
+        return "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Регистрация</title></head><body style='font-family:Arial;margin:40px;'>" +
+               "<h1>Регистрация</h1><form method='post' action='/register'>" +
+               "Логин: <input type='text' name='username'><br><br>" +
+               "Пароль: <input type='password' name='password'><br><br>" +
+               "<button style='padding:10px 20px;font-size:16px;'>Зарегистрироваться</button></form><br>" +
+               "<a href='/'>На главную</a></body></html>";
     }
 }
